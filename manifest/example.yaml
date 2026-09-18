@@ -37,7 +37,7 @@ metadata:
   name: kube-plex-backup
   namespace: plex
 spec:
-  schedule: "0 3 * * 0"   # tous les dimanches à 3h — adapte à ton besoin
+  schedule: "0 3 * * 0"
   concurrencyPolicy: Forbid
   securityContext:
     runAsUser: 0   # You have to verify the UID of the user running the Plex container. Adjust accordingly ('kubectl exec -n $NAMESPACE $PLEX_POD -- id').
