@@ -19,12 +19,14 @@ import (
 // timeout: Timeout for waiting for the pod to be terminated
 func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration) {
 	ctx := context.Background()
+	log.Printf("Starting scale down for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
 	if err := k8s.ScaleDown(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
 		log.Fatalf("Error when ScaleDown the StatefulSet: %s", err)
 	}
 	if err := k8s.WaitForStatefulSetReplicas(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 0, 2*time.Second, timeout); err != nil {
 		log.Fatalf("Timeout waiting for StatefulSet to scale down: %s", err)
 	}
+	log.Printf("StatefulSet %s/%s scaled down", plexNamespace, plexStatefulsetName)
 
 }
 
@@ -35,6 +37,7 @@ func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, p
 // timeout: Timeout for waiting for the pod to become ready
 func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration) {
 	ctx := context.Background()
+	log.Printf("Starting scale up for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
 	if err := k8s.ScaleUp(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
 		log.Fatalf("Error when ScaleUp the StatefulSet: %s", err)
 	}
@@ -44,7 +47,7 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 	if err := k8s.WaitForStatefulSetPodReady(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 0, 2*time.Second, 10*time.Minute); err != nil {
 		log.Fatalf("Timeout waiting for pod to become ready: %s", err)
 	}
-	log.Printf("%s/%s resource scaled back up and ready", plexNamespace, plexStatefulsetName)
+	log.Printf("StatefulSet %s/%s resource scaled up and ready", plexNamespace, plexStatefulsetName)
 }
 
 // RunBackup creates a tar.gz archive of the sourceDirectory and saves it to destinationArchive.
@@ -53,13 +56,11 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 // sourceDirectory: Directory to be archived
 // destinationDirectory: Destination directory for the archive
 func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationDirectory string) {
-	log.Printf(
-		"Backup for StafulSet%s/%s\nSource directory: %s\nDestination archive: %s",
-		plexNamespace, plexStatefulsetName, sourceDirectory, destinationDirectory,
-	)
-	log.Printf("Archive will begin to be created from %s to %s", sourceDirectory, destinationDirectory)
 	plexBackupFileName := fmt.Sprintf("plex_backup_%s.tar.gz", time.Now().Format("20060102_150405"))
-	log.Printf("Backup name: %s", plexBackupFileName)
+	log.Printf(
+		"Starting backup %s for StafulSet %s/%s: Source directory: %s | Destination archive: %s",
+		plexBackupFileName, plexNamespace, plexStatefulsetName, sourceDirectory, destinationDirectory,
+	)
 
 	var PathAndFullFileName string
 	PathAndFullFileName = fmt.Sprintf("%s/%s", destinationDirectory, plexBackupFileName)
@@ -74,5 +75,5 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 			log.Printf("  - %s", path)
 		}
 	}
-	fmt.Printf("Archive created: %s\n", PathAndFullFileName)
+	log.Printf("Backup completed: %s\n", PathAndFullFileName)
 }
