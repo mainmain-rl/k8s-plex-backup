@@ -51,18 +51,28 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 // plexNamespace: Namespace of the StatefulSet
 // plexStatefulsetName: Name of the StatefulSet
 // sourceDirectory: Directory to be archived
-// destinationArchive: Destination directory for the archive
-func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationArchive string) {
+// destinationDirectory: Destination directory for the archive
+func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationDirectory string) {
 	log.Printf(
 		"Backup for StafulSet%s/%s\nSource directory: %s\nDestination archive: %s",
-		plexNamespace, plexStatefulsetName, sourceDirectory, destinationArchive,
+		plexNamespace, plexStatefulsetName, sourceDirectory, destinationDirectory,
 	)
-	log.Printf("Archive will begin to be created from %s to %s", sourceDirectory, destinationArchive)
+	log.Printf("Archive will begin to be created from %s to %s", sourceDirectory, destinationDirectory)
 	plexBackupFileName := fmt.Sprintf("plex_backup_%s.tar.gz", time.Now().Format("20060102_150405"))
 	log.Printf("Backup name: %s", plexBackupFileName)
-	destinationArchive = fmt.Sprintf("%s/%s", destinationArchive, plexBackupFileName)
-	if err := targz.TarGzDirectory(sourceDirectory, destinationArchive); err != nil {
+
+	var PathAndFullFileName string
+	PathAndFullFileName = fmt.Sprintf("%s/%s", destinationDirectory, plexBackupFileName)
+
+	skipped, err := targz.TarGzDirectory(sourceDirectory, PathAndFullFileName)
+	if err != nil {
 		log.Fatalf("Error when creating the archive: %s", err)
 	}
-	fmt.Printf("Archive created: %s\n", destinationArchive)
+	if len(skipped) > 0 {
+		log.Printf("WARNING: backup completed but %d file(s) were skipped due to permission errors:", len(skipped))
+		for _, path := range skipped {
+			log.Printf("  - %s", path)
+		}
+	}
+	fmt.Printf("Archive created: %s\n", PathAndFullFileName)
 }
