@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,9 +26,11 @@ func BuildClientset() (*kubernetes.Clientset, error) {
 	} else {
 		var kubeconfig string
 		if home := homedir.HomeDir(); home != "" {
-			flag.StringVar(&kubeconfig, "kubeconfig", filepath.Join(home, ".kube", "config"), "path to kubeconfig file")
-		} else {
-			flag.StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
+			kubeconfig = filepath.Join(home, ".kube", "config")
+		}
+		// Check if KUBECONFIG environment variable is set
+		if kubeconfigEnv := os.Getenv("KUBECONFIG"); kubeconfigEnv != "" {
+			kubeconfig = kubeconfigEnv
 		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
