@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-plex-backup
+  namespace: plex
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: plex
+  name: kube-plex-backup
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get","patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kube-plex-backup
+  namespace: plex
+subjects:
+- kind: ServiceAccount
+  name: kube-plex-backup
+  namespace: plex
+roleRef:
+  kind: Role
+  name: kube-plex-backup
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kube-plex-backup
+  namespace: plex
+spec:
+  schedule: "0 3 * * 0"
+  concurrencyPolicy: Forbid
+  securityContext:
+    runAsUser: 0   # You have to verify the UID of the user running the Plex container. Adjust accordingly ('kubectl exec -n $NAMESPACE $PLEX_POD -- id').
+    runAsGroup: 0
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: kube-plex-backup
+          restartPolicy: Never
+          containers:
+            - name: kube-plex-backup
+              image: ghcr.io/mainmain-rl/kube-plex-backup:latest
+              env:
+                - name: PLEX_NAMESPACE
+                  value: "plex"
+                - name: PLEX_STATEFULSET_NAME
+                  value: "plex-plex-media-server"
+                - name: SOURCE_DIRECTORY
+                  value: "/data"
+                - name: DESTINATION_DIRECTORY
+                  value: "/backup"
+              volumeMounts:
+              - name: plex-data
+                mountPath: /data
+                readOnly: true
+              - name: plex-backup
+                mountPath: /backup
+                readOnly: false
+          volumes:
+            - name: plex-data
+              nfs:
+                server: "x.x.x.x"
+                path: "/path/to/plex/data"
+            - name: plex-backup
+              nfs:
+                server: "x.x.x.x"
+                path: "/path/to/plex/backup"
