@@ -33,6 +33,14 @@ func run() error {
 			log.Printf("Error during scale-up : %s", err)
 		}
 	}()
+	if err := worker.RunScaleDown(
+		config.KubernetesClient,
+		config.Namespace,
+		config.StatefulSetName,
+		config.ScaleDownTimeout,
+	); err != nil {
+		return fmt.Errorf("Error during scale-down : %w", err)
+	}
 
 	if err := worker.RunBackup(
 		config.Namespace,
@@ -41,15 +49,6 @@ func run() error {
 		config.DestinationDirectory,
 	); err != nil {
 		return fmt.Errorf("Error during backup : %w", err)
-	}
-
-	if err := worker.RunScaleDown(
-		config.KubernetesClient,
-		config.Namespace,
-		config.StatefulSetName,
-		config.ScaleDownTimeout,
-	); err != nil {
-		return fmt.Errorf("Error during scale-down : %w", err)
 	}
 
 	return nil
