@@ -13,6 +13,10 @@ func main() {
 		log.Printf("CronJob has failed: %s", err)
 		os.Exit(1)
 	}
+
+	log.Printf(
+		"k8s-plex-backup job is done",
+	)
 }
 
 func run() error {
@@ -32,7 +36,7 @@ func run() error {
 		config.DestinationDirectory,
 		config.ScaleDownTimeout,
 		config.ScaleUpTimeout,
-		config.RETENTION_DAYS,
+		config.RetentionDays,
 	)
 
 	defer func() {
@@ -63,9 +67,9 @@ func run() error {
 		return fmt.Errorf("Error during backup : %w", err)
 	}
 
-	log.Printf(
-		"k8s-plex-backup job is done",
-	)
+	if err := worker.CleanupBackupsByAge(config.DestinationDirectory, config.RetentionDays); err != nil {
+		return fmt.Errorf("Error during backup cleanup : %w", err)
+	}
 
 	return nil
 }

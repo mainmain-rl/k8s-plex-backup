@@ -88,10 +88,10 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 	return nil
 }
 
-// cleanupBackupsByAge deletes backup files in the destinationDirectory that are older than retentionDays.
+// CleanupBackupsByAge deletes backup files in the destinationDirectory that are older than retentionDays.
 // destinationDirectory: Directory where backups are stored
 // retentionDays: Number of days to retain backups
-func cleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
+func CleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
 	entries, err := os.ReadDir(destinationDirectory)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory: %w", err)

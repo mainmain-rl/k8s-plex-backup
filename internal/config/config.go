@@ -18,7 +18,7 @@ type Config struct {
 	ScaleDownTimeout     time.Duration
 	ScaleUpTimeout       time.Duration
 	KubernetesClient     kubernetes.Interface
-	RETENTION_DAYS       int
+	RetentionDays        int
 }
 
 // LoadConfig loads the configuration from environment variables and returns a Config struct.
@@ -36,7 +36,7 @@ func LoadConfig() (Config, error) {
 		return cfg, err
 	}
 
-	cfg.RETENTION_DAYS, err = getIntOrDefault("RETENTION_DAYS", 14)
+	cfg.RetentionDays, err = getIntOrDefault("RETENTION_DAYS", 14)
 	if err != nil {
 		return cfg, err
 	}
