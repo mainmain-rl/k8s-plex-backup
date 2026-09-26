@@ -93,7 +93,7 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 // retentionDays: Number of days to retain backups
 func CleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
 	log.Printf(
-		"Starting cleaning backups by Age for retention %s", retentionDays,
+		"Starting cleaning backups by Age for retention %d", retentionDays,
 	)
 	entries, err := os.ReadDir(destinationDirectory)
 	if err != nil {
