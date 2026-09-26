@@ -49,6 +49,7 @@ func run() error {
 			log.Printf("Error during scale-up : %s", err)
 		}
 	}()
+
 	if err := worker.RunScaleDown(
 		config.KubernetesClient,
 		config.Namespace,

@@ -92,6 +92,9 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 // destinationDirectory: Directory where backups are stored
 // retentionDays: Number of days to retain backups
 func CleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
+	log.Printf(
+		"Starting cleaning backups by Age for retention %s", retentionDays,
+	)
 	entries, err := os.ReadDir(destinationDirectory)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory: %w", err)
@@ -135,5 +138,8 @@ func CleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
 		}
 	}
 
+	log.Printf(
+		"Cleaning backups by Age done",
+	)
 	return nil
 }
