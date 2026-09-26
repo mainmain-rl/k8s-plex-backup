@@ -23,6 +23,18 @@ func run() error {
 	log.Printf(
 		"Starting k8s-plex-backup",
 	)
+
+	log.Printf(
+		"Configuration:\nNamespace=%s\nStatefulSetName=%s\nSourceDirectory=%s\nDestinationDirectory=%s\nScaleDownTimeout=%s\nScaleUpTimeout=%s\nRetentionDays=%d",
+		config.Namespace,
+		config.StatefulSetName,
+		config.SourceDirectory,
+		config.DestinationDirectory,
+		config.ScaleDownTimeout,
+		config.ScaleUpTimeout,
+		config.RETENTION_DAYS,
+	)
+
 	defer func() {
 		if err := worker.RunScaleUp(
 			config.KubernetesClient,
@@ -50,6 +62,10 @@ func run() error {
 	); err != nil {
 		return fmt.Errorf("Error during backup : %w", err)
 	}
+
+	log.Printf(
+		"k8s-plex-backup job is done",
+	)
 
 	return nil
 }

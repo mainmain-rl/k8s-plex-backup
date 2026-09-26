@@ -6,6 +6,9 @@ import (
 	"k8s-plex-backup/internal/k8s"
 	"k8s-plex-backup/internal/targz"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"time"
 
@@ -65,12 +68,11 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationDirectory string) error {
 	plexBackupFileName := fmt.Sprintf("plex_backup_%s.tar.gz", time.Now().Format("20060102_150405"))
 	log.Printf(
-		"Starting backup %s for StafulSet %s/%s: Source directory: %s | Destination archive: %s",
-		plexBackupFileName, plexNamespace, plexStatefulsetName, sourceDirectory, destinationDirectory,
+		"Starting backup %s for StafulSet %s/%s",
+		plexBackupFileName, plexNamespace, plexStatefulsetName,
 	)
 
-	var PathAndFullFileName string
-	PathAndFullFileName = fmt.Sprintf("%s/%s", destinationDirectory, plexBackupFileName)
+	PathAndFullFileName := filepath.Join(destinationDirectory, plexBackupFileName)
 
 	skipped, err := targz.TarGzDirectory(sourceDirectory, PathAndFullFileName)
 	if err != nil {
@@ -83,5 +85,55 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 		}
 	}
 	log.Printf("Backup completed: %s\n", PathAndFullFileName)
+	return nil
+}
+
+// cleanupBackupsByAge deletes backup files in the destinationDirectory that are older than retentionDays.
+// destinationDirectory: Directory where backups are stored
+// retentionDays: Number of days to retain backups
+func cleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
+	entries, err := os.ReadDir(destinationDirectory)
+	if err != nil {
+		return fmt.Errorf("failed to read backup directory: %w", err)
+	}
+
+	// Calculate the cutoff date (e.g., 14 days ago)
+	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
+
+	// Define the time format that matches your filename
+	timeFormat := "20060102_150405"
+
+	for _, entry := range entries {
+		fileName := entry.Name()
+
+		// 1. Only process files that match your backup naming pattern
+		if !entry.IsDir() && strings.HasPrefix(fileName, "plex_backup_") && strings.HasSuffix(fileName, ".tar.gz") {
+
+			// 2. Extract the date string from the filename
+			// Removes "plex_backup_" and ".tar.gz" to leave just "20231025_150405"
+			dateStr := strings.TrimPrefix(fileName, "plex_backup_")
+			dateStr = strings.TrimSuffix(dateStr, ".tar.gz")
+
+			// 3. Parse the extracted string back into a Go time object
+			fileTime, err := time.Parse(timeFormat, dateStr)
+			if err != nil {
+				log.Printf("Warning: could not parse date from filename %s: %v\n", fileName, err)
+				continue
+			}
+
+			// 4. Compare the file's time to your cutoff time
+			if fileTime.Before(cutoffTime) {
+				fileToDelete := filepath.Join(destinationDirectory, fileName)
+
+				err := os.Remove(fileToDelete)
+				if err != nil {
+					log.Printf("Error deleting old backup %s: %v\n", fileToDelete, err)
+				} else {
+					log.Printf("Deleted old backup: %s (Age: older than %d days)\n", fileToDelete, retentionDays)
+				}
+			}
+		}
+	}
+
 	return nil
 }
