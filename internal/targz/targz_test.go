@@ -2,6 +2,7 @@ package targz
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
@@ -10,220 +11,230 @@ import (
 	"testing"
 )
 
-// readArchive lit une archive .tar.gz et retourne une map "chemin dans
-// l'archive" -> contenu. Pour un répertoire, le contenu vaut nil. Pour un
-// lien symbolique, le contenu est "symlink:<cible>".
-func readArchive(t *testing.T, archivePath string) map[string][]byte {
+type archiveEntry struct {
+	content  string
+	typeflag byte
+	linkname string
+}
+
+// Lit une archive .tar.gz et retourne son contenu sous forme de map.
+func readTarGzArchive(t *testing.T, archivePath string) map[string]archiveEntry {
 	t.Helper()
 
 	f, err := os.Open(archivePath)
 	if err != nil {
-		t.Fatalf("impossible d'ouvrir l'archive: %v", err)
+		t.Fatalf("impossible d'ouvrir l'archive %s: %v", archivePath, err)
 	}
 	defer f.Close()
 
 	gzReader, err := gzip.NewReader(f)
 	if err != nil {
-		t.Fatalf("flux gzip invalide: %v", err)
+		t.Fatalf("impossible de créer le lecteur gzip: %v", err)
 	}
 	defer gzReader.Close()
 
 	tarReader := tar.NewReader(gzReader)
-	entries := make(map[string][]byte)
+	results := make(map[string]archiveEntry)
 
 	for {
-		header, err := tarReader.Next()
+		hdr, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			t.Fatalf("erreur de lecture du tar: %v", err)
+			t.Fatalf("erreur de lecture du header tar: %v", err)
 		}
 
-		switch header.Typeflag {
-		case tar.TypeDir:
-			entries[header.Name] = nil
-		case tar.TypeReg:
-			content, err := io.ReadAll(tarReader)
-			if err != nil {
-				t.Fatalf("erreur de lecture du contenu de %s: %v", header.Name, err)
+		var contentStr string
+		if hdr.Typeflag == tar.TypeReg {
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, tarReader); err != nil {
+				t.Fatalf("erreur de lecture du contenu pour %s: %v", hdr.Name, err)
 			}
-			entries[header.Name] = content
-		case tar.TypeSymlink:
-			entries[header.Name] = []byte("symlink:" + header.Linkname)
+			contentStr = buf.String()
+		}
+
+		results[hdr.Name] = archiveEntry{
+			content:  contentStr,
+			typeflag: hdr.Typeflag,
+			linkname: hdr.Linkname,
 		}
 	}
 
-	return entries
+	return results
 }
 
-func TestTarGzDirectory(t *testing.T) {
-	srcDir := t.TempDir()
+func TestTarGzDirectory_BasicAndExclusions(t *testing.T) {
+	tempDir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(srcDir, "file1.txt"), []byte("hello"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	subDir := filepath.Join(srcDir, "subdir")
-	if err := os.Mkdir(subDir, 0o755); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(subDir, "file2.txt"), []byte("world"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	srcDir := filepath.Join(tempDir, "mydata")
+	mustMkdir(t, filepath.Join(srcDir, "sub"))
+	mustMkdir(t, filepath.Join(srcDir, "sub", "Cache"))
 
-	destFile := filepath.Join(t.TempDir(), "archive.tar.gz")
+	mustWriteFile(t, filepath.Join(srcDir, "root.txt"), "hello root")
+	mustWriteFile(t, filepath.Join(srcDir, "sub", "child.txt"), "hello child")
+	mustWriteFile(t, filepath.Join(srcDir, "sub", "Cache", "cached.tmp"), "cache content")
+	mustWriteFile(t, filepath.Join(srcDir, "skip.me"), "skip this file")
 
-	skipped, err := TarGzDirectory(srcDir, destFile)
+	destArchive := filepath.Join(tempDir, "output.tar.gz")
+
+	skipped, err := TarGzDirectory(srcDir, destArchive, "Cache", "skip.me")
 	if err != nil {
-		t.Fatalf("TarGzDirectory() error = %v", err)
+		t.Fatalf("TarGzDirectory a échoué de manière inattendue: %v", err)
+	}
+
+	if len(skipped) != 0 {
+		t.Errorf("0 chemins ignorés attendus, obtenu: %v", skipped)
+	}
+
+	entries := readTarGzArchive(t, destArchive)
+	rootDirName := filepath.Base(srcDir)
+
+	// Fichiers devant être inclus
+	expectFile(t, entries, rootDirName+"/root.txt", "hello root")
+	expectFile(t, entries, rootDirName+"/sub/child.txt", "hello child")
+
+	// Éléments exclus devant être absents
+	expectMissing(t, entries, rootDirName+"/skip.me")
+	expectMissing(t, entries, rootDirName+"/sub/Cache")
+	expectMissing(t, entries, rootDirName+"/sub/Cache/cached.tmp")
+}
+
+func TestTarGzDirectory_RootNotExcluded(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Nom de dossier racine identique au nom exclu
+	srcDir := filepath.Join(tempDir, "Cache")
+	mustMkdir(t, srcDir)
+	mustWriteFile(t, filepath.Join(srcDir, "file.txt"), "data")
+
+	destArchive := filepath.Join(tempDir, "output.tar.gz")
+
+	skipped, err := TarGzDirectory(srcDir, destArchive, "Cache")
+	if err != nil {
+		t.Fatalf("TarGzDirectory a échoué: %v", err)
 	}
 	if len(skipped) != 0 {
-		t.Errorf("aucun fichier ne devrait être sauté ici, obtenu %v", skipped)
-	}
-	if _, err := os.Stat(destFile); err != nil {
-		t.Fatalf("l'archive n'a pas été créée: %v", err)
+		t.Errorf("0 chemins ignorés attendus, obtenu: %v", skipped)
 	}
 
-	entries := readArchive(t, destFile)
-	rootName := filepath.Base(srcDir)
-
-	wantFile1 := rootName + "/file1.txt"
-	if content, ok := entries[wantFile1]; !ok {
-		t.Errorf("entrée manquante: %s", wantFile1)
-	} else if string(content) != "hello" {
-		t.Errorf("contenu de %s = %q, attendu %q", wantFile1, content, "hello")
-	}
-
-	wantSubdir := rootName + "/subdir"
-	if _, ok := entries[wantSubdir]; !ok {
-		t.Errorf("entrée de répertoire manquante: %s", wantSubdir)
-	}
-
-	wantFile2 := rootName + "/subdir/file2.txt"
-	if content, ok := entries[wantFile2]; !ok {
-		t.Errorf("entrée manquante: %s", wantFile2)
-	} else if string(content) != "world" {
-		t.Errorf("contenu de %s = %q, attendu %q", wantFile2, content, "world")
-	}
+	entries := readTarGzArchive(t, destArchive)
+	expectFile(t, entries, "Cache/file.txt", "data")
 }
 
 func TestTarGzDirectory_Symlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("création de lien symbolique nécessite des privilèges sur Windows")
+		t.Skip("Test des liens symboliques ignoré sous Windows")
 	}
 
-	srcDir := t.TempDir()
+	tempDir := t.TempDir()
+	srcDir := filepath.Join(tempDir, "symdata")
+	mustMkdir(t, srcDir)
 
-	if err := os.WriteFile(filepath.Join(srcDir, "real.txt"), []byte("content"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	if err := os.Symlink("real.txt", filepath.Join(srcDir, "link.txt")); err != nil {
-		t.Fatalf("setup symlink: %v", err)
+	targetFile := filepath.Join(srcDir, "target.txt")
+	mustWriteFile(t, targetFile, "target content")
+
+	symlinkPath := filepath.Join(srcDir, "link.txt")
+	if err := os.Symlink("target.txt", symlinkPath); err != nil {
+		t.Fatalf("erreur création symlink: %v", err)
 	}
 
-	destFile := filepath.Join(t.TempDir(), "archive.tar.gz")
-	skipped, err := TarGzDirectory(srcDir, destFile)
+	destArchive := filepath.Join(tempDir, "output.tar.gz")
+	_, err := TarGzDirectory(srcDir, destArchive)
 	if err != nil {
-		t.Fatalf("TarGzDirectory() error = %v", err)
-	}
-	if len(skipped) != 0 {
-		t.Errorf("aucun fichier ne devrait être sauté ici, obtenu %v", skipped)
+		t.Fatalf("TarGzDirectory a échoué: %v", err)
 	}
 
-	entries := readArchive(t, destFile)
-	rootName := filepath.Base(srcDir)
-	wantLink := rootName + "/link.txt"
+	entries := readTarGzArchive(t, destArchive)
+	rootDirName := filepath.Base(srcDir)
 
-	content, ok := entries[wantLink]
+	symEntry, ok := entries[rootDirName+"/link.txt"]
 	if !ok {
-		t.Fatalf("entrée manquante pour le lien symbolique: %s", wantLink)
-	}
-	if string(content) != "symlink:real.txt" {
-		t.Errorf("lien = %q, attendu %q", content, "symlink:real.txt")
-	}
-}
-
-func TestTarGzDirectory_EmptyDirectory(t *testing.T) {
-	srcDir := t.TempDir()
-	destFile := filepath.Join(t.TempDir(), "archive.tar.gz")
-
-	skipped, err := TarGzDirectory(srcDir, destFile)
-	if err != nil {
-		t.Fatalf("TarGzDirectory() error = %v", err)
-	}
-	if len(skipped) != 0 {
-		t.Errorf("aucun fichier ne devrait être sauté ici, obtenu %v", skipped)
+		t.Fatalf("lien symbolique %s/link.txt absent de l'archive", rootDirName)
 	}
 
-	entries := readArchive(t, destFile)
-	rootName := filepath.Base(srcDir)
-
-	if _, ok := entries[rootName]; !ok {
-		t.Errorf("entrée de répertoire racine manquante: %s", rootName)
+	if symEntry.typeflag != tar.TypeSymlink {
+		t.Errorf("type attendu Symlink (%c), obtenu: %c", tar.TypeSymlink, symEntry.typeflag)
 	}
-	if len(entries) != 1 {
-		t.Errorf("attendu 1 entrée (le répertoire racine), obtenu %d: %v", len(entries), entries)
-	}
-}
-
-func TestTarGzDirectory_SourceDoesNotExist(t *testing.T) {
-	destFile := filepath.Join(t.TempDir(), "archive.tar.gz")
-	missingSrc := filepath.Join(t.TempDir(), "does-not-exist")
-
-	if _, err := TarGzDirectory(missingSrc, destFile); err == nil {
-		t.Fatal("erreur attendue pour un répertoire source inexistant, obtenu nil")
-	}
-}
-
-func TestTarGzDirectory_InvalidDestination(t *testing.T) {
-	srcDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(srcDir, "file.txt"), []byte("x"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	// Répertoire parent inexistant -> os.Create doit échouer.
-	destFile := filepath.Join(srcDir, "nope", "archive.tar.gz")
-
-	if _, err := TarGzDirectory(srcDir, destFile); err == nil {
-		t.Fatal("erreur attendue pour une destination invalide, obtenu nil")
+	if symEntry.linkname != "target.txt" {
+		t.Errorf("cible du lien attendue 'target.txt', obtenue: '%s'", symEntry.linkname)
 	}
 }
 
 func TestTarGzDirectory_PermissionDenied(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("les bits de permission Unix ne s'appliquent pas de la même façon sous Windows")
-	}
 	if os.Geteuid() == 0 {
-		t.Skip("test invalide en root: les permissions de fichier sont ignorées")
+		t.Skip("Test de permissions ignoré lors d'une exécution en root")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Test de permissions ignoré sous Windows")
 	}
 
-	srcDir := t.TempDir()
+	tempDir := t.TempDir()
+	srcDir := filepath.Join(tempDir, "permdata")
+	mustMkdir(t, srcDir)
 
-	if err := os.WriteFile(filepath.Join(srcDir, "readable.txt"), []byte("ok"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
+	unreadableFile := filepath.Join(srcDir, "secret.txt")
+	mustWriteFile(t, unreadableFile, "secret")
+	if err := os.Chmod(unreadableFile, 0o000); err != nil {
+		t.Fatalf("impossible de retirer les permissions: %v", err)
 	}
-	restrictedPath := filepath.Join(srcDir, "restricted.txt")
-	if err := os.WriteFile(restrictedPath, []byte("secret"), 0o000); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	defer os.Chmod(unreadableFile, 0o644)
 
-	destFile := filepath.Join(t.TempDir(), "archive.tar.gz")
-
-	skipped, err := TarGzDirectory(srcDir, destFile)
+	destArchive := filepath.Join(tempDir, "output.tar.gz")
+	skipped, err := TarGzDirectory(srcDir, destArchive)
 	if err != nil {
-		t.Fatalf("TarGzDirectory() error = %v, attendu nil (le fichier restreint doit juste être ignoré)", err)
-	}
-	if len(skipped) != 1 || skipped[0] != restrictedPath {
-		t.Errorf("skipped = %v, attendu [%s]", skipped, restrictedPath)
+		t.Fatalf("TarGzDirectory ne doit pas planter sur un refus de permission, erreur: %v", err)
 	}
 
-	entries := readArchive(t, destFile)
-	rootName := filepath.Base(srcDir)
-
-	if _, ok := entries[rootName+"/readable.txt"]; !ok {
-		t.Errorf("le fichier lisible aurait dû être présent dans l'archive")
+	if len(skipped) != 1 || skipped[0] != unreadableFile {
+		t.Errorf("skippedPaths devrait contenir %s, obtenu: %v", unreadableFile, skipped)
 	}
-	if _, ok := entries[rootName+"/restricted.txt"]; ok {
-		t.Errorf("le fichier sans permission n'aurait pas dû être présent dans l'archive")
+}
+
+func TestTarGzDirectory_InvalidDestFile(t *testing.T) {
+	tempDir := t.TempDir()
+	srcDir := filepath.Join(tempDir, "src")
+	mustMkdir(t, srcDir)
+
+	invalidDest := filepath.Join(tempDir, "dossier_inexistant", "out.tar.gz")
+	_, err := TarGzDirectory(srcDir, invalidDest)
+	if err == nil {
+		t.Error("une erreur était attendue avec un dossier de destination invalide")
+	}
+}
+
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("erreur création dossier %s: %v", path, err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("erreur écriture fichier %s: %v", path, err)
+	}
+}
+
+func expectFile(t *testing.T, entries map[string]archiveEntry, name, expectedContent string) {
+	t.Helper()
+	entry, ok := entries[name]
+	if !ok {
+		t.Errorf("l'élément %s devrait exister dans l'archive", name)
+		return
+	}
+	if entry.typeflag != tar.TypeReg {
+		t.Errorf("l'élément %s n'est pas un fichier régulier", name)
+	}
+	if entry.content != expectedContent {
+		t.Errorf("contenu pour %s incorrect: attendu %q, obtenu %q", name, expectedContent, entry.content)
+	}
+}
+
+func expectMissing(t *testing.T, entries map[string]archiveEntry, name string) {
+	t.Helper()
+	if _, ok := entries[name]; ok {
+		t.Errorf("l'élément %s devrait être absent de l'archive", name)
 	}
 }

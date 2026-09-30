@@ -2,9 +2,10 @@ package config
 
 import (
 	"fmt"
-	"k8s-plex-backup/internal/k8s"
 	"os"
 	"time"
+
+	"k8s-plex-backup/internal/k8s"
 
 	"k8s.io/client-go/kubernetes"
 )
@@ -19,6 +20,7 @@ type Config struct {
 	ScaleUpTimeout       time.Duration
 	KubernetesClient     kubernetes.Interface
 	RetentionDays        int
+	PlexExcludedDirs     []string
 }
 
 // LoadConfig loads the configuration from environment variables and returns a Config struct.
@@ -61,6 +63,8 @@ func LoadConfig() (Config, error) {
 	if cfg.StatefulSetName, err = requireEnv("PLEX_STATEFULSET_NAME"); err != nil {
 		return cfg, err
 	}
+
+	cfg.PlexExcludedDirs = []string{"Cache", "Codecs", "Crash Reports"}
 
 	return cfg, nil
 }

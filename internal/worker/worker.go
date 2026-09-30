@@ -3,14 +3,14 @@ package worker
 import (
 	"context"
 	"fmt"
-	"k8s-plex-backup/internal/k8s"
-	"k8s-plex-backup/internal/targz"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
-
 	"time"
+
+	"k8s-plex-backup/internal/k8s"
+	"k8s-plex-backup/internal/targz"
 
 	"k8s.io/client-go/kubernetes"
 )
@@ -33,7 +33,6 @@ func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, p
 	}
 	log.Printf("StatefulSet %s/%s scaled down", plexNamespace, plexStatefulsetName)
 	return nil
-
 }
 
 // RunScaleUp scales up the StatefulSet and waits for the pod to become ready.
@@ -61,11 +60,13 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 }
 
 // RunBackup creates a tar.gz archive of the sourceDirectory and saves it to destinationArchive.
+// Subdirectories listed in plexExcludedDirs (Cache, Codecs, Crash Reports)
+// are left out of the archive since they're regenerable/transient data.
 // plexNamespace: Namespace of the StatefulSet
 // plexStatefulsetName: Name of the StatefulSet
 // sourceDirectory: Directory to be archived
 // destinationDirectory: Destination directory for the archive
-func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationDirectory string) error {
+func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory string, destinationDirectory string, plexExcludedDirs []string) error {
 	plexBackupFileName := fmt.Sprintf("plex_backup_%s.tar.gz", time.Now().Format("20060102_150405"))
 	log.Printf(
 		"Starting backup %s for StafulSet %s/%s",
@@ -74,7 +75,7 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 
 	PathAndFullFileName := filepath.Join(destinationDirectory, plexBackupFileName)
 
-	skipped, err := targz.TarGzDirectory(sourceDirectory, PathAndFullFileName)
+	skipped, err := targz.TarGzDirectory(sourceDirectory, PathAndFullFileName, plexExcludedDirs...)
 	if err != nil {
 		return fmt.Errorf("error when creating the archive: %w", err)
 	}

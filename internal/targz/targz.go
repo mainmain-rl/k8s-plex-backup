@@ -12,12 +12,21 @@ import (
 
 // TarGzDirectory creates an archive .tar.gz (destFile) of the directory
 // srcDir. It will include all files and subdirectories, preserving the
-// directory structure. Files, symlinks or directories that can't be read
-// due to a permission error are logged and skipped rather than aborting
-// the whole archive (e.g. Plex's .LocalAdminToken, only readable by its
-// owning process) — their paths are returned in skippedPaths so the
-// caller can decide whether that's acceptable.
-func TarGzDirectory(srcDir, destFile string) (skippedPaths []string, err error) {
+// directory structure, except any entry listed in excludeNames: each name
+// is matched against the base name of every file or directory encountered
+// (e.g. "Cache" matches ".../Plex Media Server/Cache" no matter how deep
+// it is). A matching directory is skipped along with everything
+// underneath it, mirroring `tar --exclude=NAME`. A matching file is
+// skipped on its own.
+//
+// Files, symlinks or directories that can't be read due to a permission
+// error are logged and skipped rather than aborting the whole archive
+// (e.g. Plex's .LocalAdminToken, only readable by its owning process) —
+// their paths are returned in skippedPaths so the caller can decide
+// whether that's acceptable. Excluded entries are logged too but are not
+// added to skippedPaths, since they were left out on purpose rather than
+// because of an error.
+func TarGzDirectory(srcDir, destFile string, excludeNames ...string) (skippedPaths []string, err error) {
 	out, err := os.Create(destFile)
 	if err != nil {
 		return nil, fmt.Errorf("error creating file %s: %w", destFile, err)
@@ -44,6 +53,11 @@ func TarGzDirectory(srcDir, destFile string) (skippedPaths []string, err error) 
 
 	srcDir = filepath.Clean(srcDir)
 
+	exclude := make(map[string]struct{}, len(excludeNames))
+	for _, name := range excludeNames {
+		exclude[name] = struct{}{}
+	}
+
 	err = filepath.Walk(srcDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			if os.IsPermission(walkErr) {
@@ -52,6 +66,18 @@ func TarGzDirectory(srcDir, destFile string) (skippedPaths []string, err error) 
 				return nil
 			}
 			return walkErr
+		}
+
+		// Never exclude the root itself, only entries underneath it.
+		if path != srcDir {
+			if _, excluded := exclude[info.Name()]; excluded {
+				if info.IsDir() {
+					log.Printf("skipping excluded directory %s", path)
+					return filepath.SkipDir
+				}
+				log.Printf("skipping excluded file %s", path)
+				return nil
+			}
 		}
 
 		relPath, relErr := filepath.Rel(filepath.Dir(srcDir), path)

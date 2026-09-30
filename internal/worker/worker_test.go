@@ -1,28 +1,5 @@
 package worker
 
-// NOTE SUR LES HYPOTHÈSES (internal/k8s et internal/targz non fournis) :
-//
-// Les tests de RunScaleDown/RunScaleUp utilisent un fake clientset
-// (k8s.io/client-go/kubernetes/fake) et un petit "reconciler" maison qui
-// simule le comportement du vrai contrôleur StatefulSet (que le fake
-// clientset ne fait pas tourner tout seul). Ce reconciler suppose que
-// internal/k8s.WaitForStatefulSetReplicas regarde StatefulSet.Status.Replicas
-// / ReadyReplicas, et que WaitForStatefulSetPodReady regarde un Pod nommé
-// "<statefulset>-0" (ordinal 0). Si l'implémentation réelle regarde autre
-// chose (ex: un champ de status différent, un autre nom de pod), il suffit
-// d'ajuster reconcileOnce() en conséquence — le reste des tests n'a pas à
-// changer.
-//
-// Les tests "TimesOut" et "StatefulSetNotFound" ne dépendent d'aucune de ces
-// hypothèses : ils vérifient juste la propagation d'erreur, qui doit tenir
-// quelle que soit l'implémentation de internal/k8s.
-//
-// Les tests de RunBackup appellent la vraie fonction targz.TarGzDirectory
-// (elle n'est pas mockée) et vérifient le résultat observable : un fichier
-// .tar.gz valide contenant les fichiers de la source. Aucune hypothèse sur
-// son fonctionnement interne n'est nécessaire, seulement sur le contrat
-// (archive tar.gz valide, erreur si le répertoire source n'existe pas).
-
 import (
 	"archive/tar"
 	"compress/gzip"
@@ -242,7 +219,7 @@ func TestRunBackup_CreatesArchiveWithSourceContents(t *testing.T) {
 	writeFile(t, filepath.Join(srcDir, "config.xml"), "<config/>")
 	writeFile(t, filepath.Join(srcDir, "sub", "data.db"), "fake-db-bytes")
 
-	if err := RunBackup("plex-ns", "plex", srcDir, destDir); err != nil {
+	if err := RunBackup("plex-ns", "plex", srcDir, destDir, nil); err != nil {
 		t.Fatalf("RunBackup a renvoyé une erreur inattendue : %v", err)
 	}
 
@@ -264,11 +241,39 @@ func TestRunBackup_CreatesArchiveWithSourceContents(t *testing.T) {
 	}
 }
 
+func TestRunBackup_ExcludesSpecifiedDirectories(t *testing.T) {
+	srcDir := t.TempDir()
+	destDir := t.TempDir()
+
+	writeFile(t, filepath.Join(srcDir, "keep.txt"), "keep me")
+	writeFile(t, filepath.Join(srcDir, "Cache", "cached.tmp"), "cache file")
+	writeFile(t, filepath.Join(srcDir, "Codecs", "codec.so"), "codec file")
+
+	excluded := []string{"Cache", "Codecs"}
+
+	if err := RunBackup("plex-ns", "plex", srcDir, destDir, excluded); err != nil {
+		t.Fatalf("RunBackup a renvoyé une erreur inattendue : %v", err)
+	}
+
+	archivePath := findBackupArchive(t, destDir)
+	entries := listTarGzEntries(t, archivePath)
+
+	if !containsSuffix(entries, "keep.txt") {
+		t.Errorf("l'élément keep.txt devrait être présent")
+	}
+
+	for _, ex := range excluded {
+		if containsSuffix(entries, ex) {
+			t.Errorf("l'élément exclu %q ne devrait pas être présent dans l'archive", ex)
+		}
+	}
+}
+
 func TestRunBackup_ReturnsErrorForMissingSourceDirectory(t *testing.T) {
 	destDir := t.TempDir()
 	missingSrc := filepath.Join(destDir, "does-not-exist")
 
-	if err := RunBackup("plex-ns", "plex", missingSrc, destDir); err == nil {
+	if err := RunBackup("plex-ns", "plex", missingSrc, destDir, nil); err == nil {
 		t.Fatal("attendu une erreur quand le répertoire source n'existe pas")
 	}
 }
