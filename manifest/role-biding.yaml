@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kube-plex-backup
+  namespace: plex
+subjects:
+- kind: ServiceAccount
+  name: kube-plex-backup
+  namespace: plex
+roleRef:
+  kind: Role
+  name: kube-plex-backup
+  apiGroup: rbac.authorization.k8s.io

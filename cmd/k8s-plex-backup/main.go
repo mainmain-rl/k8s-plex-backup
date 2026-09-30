@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"k8s-plex-backup/internal/config"
-	"k8s-plex-backup/internal/worker"
 	"log"
 	"os"
+
+	"k8s-plex-backup/internal/config"
+	"k8s-plex-backup/internal/worker"
 )
 
 func main() {
@@ -64,6 +65,7 @@ func run() error {
 		config.StatefulSetName,
 		config.SourceDirectory,
 		config.DestinationDirectory,
+		config.PlexExcludedDirs,
 	); err != nil {
 		return fmt.Errorf("Error during backup : %w", err)
 	}
