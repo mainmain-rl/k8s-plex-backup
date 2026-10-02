@@ -34,7 +34,7 @@ func BuildClientset() (*kubernetes.Clientset, error) {
 		}
 		config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
-			return nil, fmt.Errorf("Error when reading kubeconfig: %w", err)
+			return nil, fmt.Errorf("Error when reading kubeconfig: %w", err) //nolint:all
 		}
 		return kubernetes.NewForConfig(config)
 	}

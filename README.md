@@ -29,6 +29,7 @@ Set these environment variables:
 | `SCALE_DOWN_TIMEOUT` | Timeout for scaling down StatefulSet | 5m |
 | `SCALE_UP_TIMEOUT` | Timeout for scaling up StatefulSet | 10m |
 | `RETENTION_DAYS` | Number of days for Cleanup Backup | 14 |
+| `PLEX_EXCLUDED_DIRS` | Excluded Directories for the backup | ["Cache", "Codecs", "Crash Reports"] |
 
 ## Usage
 
