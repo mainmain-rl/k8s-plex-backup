@@ -111,7 +111,7 @@ func TarGzDirectory(srcDir, destFile string, excludeNames ...string) (skippedPat
 				}
 				return fmt.Errorf("error opening %s: %w", path, oErr)
 			}
-			defer f.Close()
+			defer f.Close() //nolint:errcheck
 		}
 
 		header, hErr := tar.FileInfoHeader(info, link)

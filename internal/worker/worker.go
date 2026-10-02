@@ -24,11 +24,11 @@ func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, p
 	ctx := context.Background()
 	log.Printf("Starting scale down for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
 	if err := k8s.ScaleDown(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
-		fmt.Errorf("Error when ScaleDown the StatefulSet: %s", err)
+		fmt.Errorf("Error when ScaleDown the StatefulSet: %s", err) //nolint:all
 		return err
 	}
 	if err := k8s.WaitForStatefulSetReplicas(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 0, 2*time.Second, timeout); err != nil {
-		fmt.Errorf("Timeout waiting for StatefulSet to scale down: %s", err)
+		fmt.Errorf("Timeout waiting for StatefulSet to scale down: %s", err) //nolint:all
 		return err
 	}
 	log.Printf("StatefulSet %s/%s scaled down", plexNamespace, plexStatefulsetName)
@@ -44,15 +44,14 @@ func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, ple
 	ctx := context.Background()
 	log.Printf("Starting scale up for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
 	if err := k8s.ScaleUp(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
-		fmt.Errorf("Error when ScaleUp the StatefulSet: %s", err)
-		return err
+		return fmt.Errorf("Error when ScaleUp the StatefulSet: %s", err) //nolint:all
 	}
 	if err := k8s.WaitForStatefulSetReplicas(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 1, 2*time.Second, timeout); err != nil {
-		fmt.Errorf("Timeout waiting for StatefulSet to scale up: %s", err)
+		fmt.Errorf("Timeout waiting for StatefulSet to scale up: %s", err) //nolint:all
 		return err
 	}
 	if err := k8s.WaitForStatefulSetPodReady(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 0, 2*time.Second, 10*time.Minute); err != nil {
-		fmt.Errorf("Timeout waiting for pod to become ready: %s", err)
+		fmt.Errorf("Timeout waiting for pod to become ready: %s", err) //nolint:all
 		return err
 	}
 	log.Printf("StatefulSet %s/%s resource scaled up and ready", plexNamespace, plexStatefulsetName)
@@ -77,7 +76,7 @@ func RunBackup(plexNamespace string, plexStatefulsetName string, sourceDirectory
 
 	skipped, err := targz.TarGzDirectory(sourceDirectory, PathAndFullFileName, plexExcludedDirs...)
 	if err != nil {
-		return fmt.Errorf("error when creating the archive: %w", err)
+		return fmt.Errorf("error when creating the archive: %w", err) //nolint:errcheck
 	}
 	if len(skipped) > 0 {
 		log.Printf("WARNING: backup completed but %d file(s) were skipped due to permission errors:", len(skipped))
@@ -98,7 +97,7 @@ func CleanupBackupsByAge(destinationDirectory string, retentionDays int) error {
 	)
 	entries, err := os.ReadDir(destinationDirectory)
 	if err != nil {
-		return fmt.Errorf("failed to read backup directory: %w", err)
+		return fmt.Errorf("failed to read backup directory: %w", err) //nolint:errcheck
 	}
 
 	// Calculate the cutoff date (e.g., 14 days ago)

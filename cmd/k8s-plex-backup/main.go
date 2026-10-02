@@ -57,7 +57,7 @@ func run() error {
 		config.StatefulSetName,
 		config.ScaleDownTimeout,
 	); err != nil {
-		return fmt.Errorf("Error during scale-down : %w", err)
+		return fmt.Errorf("Error during scale-down : %w", err) //nolint:all
 	}
 
 	if err := worker.RunBackup(
@@ -67,11 +67,11 @@ func run() error {
 		config.DestinationDirectory,
 		config.PlexExcludedDirs,
 	); err != nil {
-		return fmt.Errorf("Error during backup : %w", err)
+		return fmt.Errorf("Error during backup : %w", err) //nolint:all
 	}
 
 	if err := worker.CleanupBackupsByAge(config.DestinationDirectory, config.RetentionDays); err != nil {
-		return fmt.Errorf("Error during backup cleanup : %w", err)
+		return fmt.Errorf("Error during backup cleanup : %w", err) //nolint:all
 	}
 
 	return nil
