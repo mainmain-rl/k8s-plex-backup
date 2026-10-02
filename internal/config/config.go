@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"k8s-plex-backup/internal/k8s"
@@ -64,7 +65,10 @@ func LoadConfig() (Config, error) {
 		return cfg, err
 	}
 
-	cfg.PlexExcludedDirs = []string{"Cache", "Codecs", "Crash Reports"}
+	cfg.PlexExcludedDirs, err = getListItemOrDefault("PLEX_EXCLUDED_DIRS", []string{"Cache", "Codecs", "Crash Reports"})
+	if err != nil {
+		return cfg, err
+	}
 
 	return cfg, nil
 }
@@ -113,4 +117,17 @@ func getIntOrDefault(key string, def int) (int, error) {
 		return 0, fmt.Errorf("invalid integer for %s: %w", key, err)
 	}
 	return i, nil
+}
+
+// getListItemOrDefault retrieves a list of strings from an environment variable, or returns a default list if the variable is not set.
+// The environment variable should contain a comma-separated list of values.
+// key: The name of the environment variable to retrieve.
+// def: The default list of strings to return if the environment variable is not set.
+// Returns the parsed list of strings or the default list, and an error if parsing fails.
+func getListItemOrDefault(key string, def []string) ([]string, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return def, nil
+	}
+	return strings.Split(v, ","), nil
 }
