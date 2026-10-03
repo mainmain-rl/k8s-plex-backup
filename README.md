@@ -1,4 +1,13 @@
-# k8s-plex-backup
+<h1 align="center">
+  <img src="./assets/images/logo_without_background.png" alt="logo" width="50" valign="middle">
+  k8s-plex-backup
+</h1>
+
+![logo](./assets/images/logo.jpeg)
+
+[![Build and Push on TAG](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/build_and_push.yaml/badge.svg)](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/build_and_push.yaml)
+[![Pre-commit Checks](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/pre-commit.yaml/badge.svg?branch=main)](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/pre-commit.yaml)
+[![Dependabot Updates](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/dependabot/dependabot-updates/badge.svg?branch=main)](https://github.com/mainmain-rl/k8s-plex-backup/actions/workflows/dependabot/dependabot-updates)
 
 A Kubernetes-native backup tool for Plex media server StatefulSets, works perfectly with the official [Plex helm chart](https://github.com/plexinc/pms-docker).
 
@@ -15,6 +24,7 @@ This tool performs a zero-downtime backup of a Plex StatefulSet by:
 
 - Kubernetes cluster access (in-cluster or via kubeconfig)
 - Go 1.26+
+- mise 2025.10.21+
 
 ## Configuration
 
@@ -29,7 +39,7 @@ Set these environment variables:
 | `SCALE_DOWN_TIMEOUT` | Timeout for scaling down StatefulSet | 5m |
 | `SCALE_UP_TIMEOUT` | Timeout for scaling up StatefulSet | 10m |
 | `RETENTION_DAYS` | Number of days for Cleanup Backup | 14 |
-| `PLEX_EXCLUDED_DIRS` | Excluded Directories for the backup | ["Cache", "Codecs", "Crash Reports"] |
+| `PLEX_EXCLUDED_DIRS` | Excluded Directories or Files for the backup | ["Cache", "Codecs", "Crash Reports"] |
 
 ## Usage
 
