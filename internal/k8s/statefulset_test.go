@@ -64,7 +64,7 @@ func TestScaleDown_Success(t *testing.T) {
 	sts := newFakeStatefulSet(namespace, name, 3, 3)
 	clientset := fake.NewSimpleClientset(sts)
 
-	if err := ScaleDown(ctx, clientset, namespace, name); err != nil {
+	if err := ScaleDown(ctx, clientset, namespace, name, GitOpsOptions{}); err != nil {
 		t.Fatalf("ScaleDown returned unexpected error: %v", err)
 	}
 
@@ -77,11 +77,56 @@ func TestScaleDown_Success(t *testing.T) {
 	}
 }
 
+func TestScaleDownAndUp_GitOpsAnnotations(t *testing.T) {
+	ctx := context.Background()
+	namespace, name := "default", "my-sts"
+	options := GitOpsOptions{FluxCD: true, ArgoCD: true}
+	sts := newFakeStatefulSet(namespace, name, 1, 1)
+	sts.Annotations = map[string]string{"example.com/keep": "value"}
+	clientset := fake.NewSimpleClientset(sts)
+
+	if err := ScaleDown(ctx, clientset, namespace, name, options); err != nil {
+		t.Fatalf("ScaleDown returned unexpected error: %v", err)
+	}
+
+	updated, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get statefulset after scale down: %v", err)
+	}
+	if updated.Annotations[fluxCDReconcileAnnotation] != "disabled" {
+		t.Errorf("expected Flux annotation to be disabled, got %q", updated.Annotations[fluxCDReconcileAnnotation])
+	}
+	if updated.Annotations[argoCDSkipReconcileAnnotation] != "true" {
+		t.Errorf("expected Argo CD annotation to be true, got %q", updated.Annotations[argoCDSkipReconcileAnnotation])
+	}
+	if updated.Annotations["example.com/keep"] != "value" {
+		t.Errorf("expected unrelated annotation to be preserved, got %q", updated.Annotations["example.com/keep"])
+	}
+
+	if err := ScaleUp(ctx, clientset, namespace, name, options); err != nil {
+		t.Fatalf("ScaleUp returned unexpected error: %v", err)
+	}
+
+	updated, err = clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get statefulset after scale up: %v", err)
+	}
+	if _, exists := updated.Annotations[fluxCDReconcileAnnotation]; exists {
+		t.Errorf("expected Flux annotation to be removed, got %q", updated.Annotations[fluxCDReconcileAnnotation])
+	}
+	if _, exists := updated.Annotations[argoCDSkipReconcileAnnotation]; exists {
+		t.Errorf("expected Argo CD annotation to be removed, got %q", updated.Annotations[argoCDSkipReconcileAnnotation])
+	}
+	if updated.Annotations["example.com/keep"] != "value" {
+		t.Errorf("expected unrelated annotation to be preserved, got %q", updated.Annotations["example.com/keep"])
+	}
+}
+
 func TestScaleDown_NotFound(t *testing.T) {
 	ctx := context.Background()
 	clientset := fake.NewSimpleClientset()
 
-	err := ScaleDown(ctx, clientset, "default", "does-not-exist")
+	err := ScaleDown(ctx, clientset, "default", "does-not-exist", GitOpsOptions{})
 	if err == nil {
 		t.Fatal("expected an error when scaling down a non-existent statefulset, got nil")
 	}
@@ -101,7 +146,7 @@ func TestScaleUp_Success(t *testing.T) {
 	sts := newFakeStatefulSet(namespace, name, 0, 0)
 	clientset := fake.NewSimpleClientset(sts)
 
-	if err := ScaleUp(ctx, clientset, namespace, name); err != nil {
+	if err := ScaleUp(ctx, clientset, namespace, name, GitOpsOptions{}); err != nil {
 		t.Fatalf("ScaleUp returned unexpected error: %v", err)
 	}
 
@@ -118,7 +163,7 @@ func TestScaleUp_NotFound(t *testing.T) {
 	ctx := context.Background()
 	clientset := fake.NewSimpleClientset()
 
-	err := ScaleUp(ctx, clientset, "default", "does-not-exist")
+	err := ScaleUp(ctx, clientset, "default", "does-not-exist", GitOpsOptions{})
 	if err == nil {
 		t.Fatal("expected an error when scaling up a non-existent statefulset, got nil")
 	}

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,8 @@ type Config struct {
 	KubernetesClient     kubernetes.Interface
 	RetentionDays        int
 	PlexExcludedDirs     []string
+	FluxCDOption         bool
+	ArgoCDOption         bool
 }
 
 // LoadConfig loads the configuration from environment variables and returns a Config struct.
@@ -70,7 +73,29 @@ func LoadConfig() (Config, error) {
 		return cfg, err
 	}
 
+	cfg.FluxCDOption, err = getBoolOrDefault("FLUXCD_OPTION", false)
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.ArgoCDOption, err = getBoolOrDefault("ARGOCD_OPTION", false)
+	if err != nil {
+		return cfg, err
+	}
+
 	return cfg, nil
+}
+
+func getBoolOrDefault(key string, def bool) (bool, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return def, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("invalid boolean for %s: %w", key, err)
+	}
+	return b, nil
 }
 
 // requireEnv retrieves the value of an environment variable and returns an error if it is not set.

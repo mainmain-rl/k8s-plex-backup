@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"k8s-plex-backup/internal/config"
+	"k8s-plex-backup/internal/k8s"
 	"k8s-plex-backup/internal/worker"
 )
 
@@ -46,6 +47,7 @@ func run() error {
 			config.Namespace,
 			config.StatefulSetName,
 			config.ScaleUpTimeout,
+			k8s.GitOpsOptions{FluxCD: config.FluxCDOption, ArgoCD: config.ArgoCDOption},
 		); err != nil {
 			log.Printf("Error during scale-up : %s", err)
 		}
@@ -56,6 +58,7 @@ func run() error {
 		config.Namespace,
 		config.StatefulSetName,
 		config.ScaleDownTimeout,
+		k8s.GitOpsOptions{FluxCD: config.FluxCDOption, ArgoCD: config.ArgoCDOption},
 	); err != nil {
 		return fmt.Errorf("Error during scale-down : %w", err) //nolint:all
 	}
