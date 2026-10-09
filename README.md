@@ -63,6 +63,84 @@ export DESTINATION_DIRECTORY=/backups
 2. **Backup**: A compressed tar.gz archive is created of the source directory with timestamp naming (e.g., `plex_backup_20240101_150405.tar.gz`)
 3. **Scale Up**: The StatefulSet is restored to 1 replica, resuming the Plex service
 
+## Architecture
+
+### Package-Level Interconnection Diagram
+
+```mermaid
+graph TD
+    A["cmd/k8s-plex-backup/main.go"] --> B["internal/config"]
+    A --> C["internal/worker"]
+    A --> D["internal/k8s"]
+
+    B --> D
+
+    C --> D
+    C --> E["internal/targz"]
+
+    subgraph "Internal Packages"
+        B["config<br/>LoadConfig()"]
+        C["worker<br/>RunScaleDown, RunScaleUp,<br/>RunBackup, CleanupBackupsByAge"]
+        D["k8s<br/>BuildClientset, ScaleDown,<br/>ScaleUp, WaitForStatefulSet*"]
+        E["targz<br/>TarGzDirectory"]
+    end
+
+    D --> F["k8s.io/client-go<br/>kubernetes.Interface"]
+```
+
+### Process Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant CronJob as K8s CronJob
+    participant Main as main.run()
+    participant Config as config.LoadConfig()
+    participant K8s as k8s.Client
+    participant Worker as worker
+    participant TarGz as targz
+
+    CronJob->>Main: Trigger
+    Main->>Config: LoadConfig()
+    Config->>K8s: BuildClientset()
+    K8s-->>Config: *kubernetes.Clientset
+    Config-->>Main: Config struct
+    Main->>Worker: RunScaleDown()
+    Worker->>K8s: ScaleDown()
+    Worker->>K8s: WaitForStatefulSetReplicas(0)
+    K8s-->>Worker: Scale down confirmed
+
+    Main->>Worker: RunBackup()
+    Worker->>TarGz: TarGzDirectory()
+    TarGz-->>Worker: Archive created
+    Worker-->>Main: Backup complete
+
+    Main->>Worker: CleanupBackupsByAge()
+    Worker-->>Main: Old backups removed
+
+    Note over Main: defer RunScaleUp()
+    Worker->>K8s: ScaleUp()
+    Worker->>K8s: WaitForStatefulSetReplicas(1)
+    Worker->>K8s: WaitForStatefulSetPodReady()
+    K8s-->>Worker: Pod ready
+```
+
+### Key Interconnections
+
+| Source | Targets | Purpose |
+|--------|---------|---------|
+| `main.go` | `config`, `worker`, `k8s` | Orchestrates the entire backup flow |
+| `config.go` | `k8s` | Builds the Kubernetes client |
+| `worker.go` | `k8s`, `targz` | Coordinates scaling and archiving |
+| `k8s/client.go` | *(none internal)* | Loads in-cluster or kubeconfig |
+| `k8s/statefulset.go` | *(none internal)* | StatefulSet scaling logic |
+| `targz/targz.go` | *(none internal)* | Standalone archiving logic |
+
+### Design Observations
+
+- **Clean layering**: `targz` and `k8s/client` are leaf packages with no internal dependencies.
+- **Worker as hub**: `worker.go` is the central orchestrator that bridges Kubernetes operations and file archiving.
+- **Config dependency**: `config.go` depends on `k8s.go` only for `BuildClientset()`, keeping configuration loading separate from Kubernetes business logic.
+
 ## Notes
 
 - Files that can't be read due to permission errors are skipped with a warning but you have to managed the [container rights](/manifest/example.yaml#spec.securityContext)
