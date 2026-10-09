@@ -31,7 +31,7 @@ func run() error {
 	)
 
 	log.Printf(
-		"Configuration:\nNamespace=%s\nStatefulSetName=%s\nSourceDirectory=%s\nDestinationDirectory=%s\nScaleDownTimeout=%s\nScaleUpTimeout=%s\nRetentionDays=%d",
+		"Configuration:\nNamespace=%s\nStatefulSetName=%s\nSourceDirectory=%s\nDestinationDirectory=%s\nScaleDownTimeout=%s\nScaleUpTimeout=%s\nRetentionDays=%d\nFluxCDOption=%t\nArgoCDOption=%t",
 		config.Namespace,
 		config.StatefulSetName,
 		config.SourceDirectory,
@@ -39,6 +39,8 @@ func run() error {
 		config.ScaleDownTimeout,
 		config.ScaleUpTimeout,
 		config.RetentionDays,
+		config.FluxCDOption,
+		config.ArgoCDOption,
 	)
 
 	defer func() {
