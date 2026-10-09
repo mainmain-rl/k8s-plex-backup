@@ -40,6 +40,8 @@ Set these environment variables:
 | `SCALE_UP_TIMEOUT` | Timeout for scaling up StatefulSet | 10m |
 | `RETENTION_DAYS` | Number of days for Cleanup Backup | 14 |
 | `PLEX_EXCLUDED_DIRS` | Excluded Directories or Files for the backup | ["Cache", "Codecs", "Crash Reports"] |
+| `FLUXCD_OPTION` | Set the Flux reconciliation annotation while Plex is scaled down | false |
+| `ARGOCD_OPTION` | Set the Argo CD skip-reconcile annotation while Plex is scaled down | false |
 
 ## Usage
 

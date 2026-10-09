@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -14,17 +15,39 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	fluxCDReconcileAnnotation     = "kustomize.toolkit.fluxcd.io/reconcile"
+	argoCDSkipReconcileAnnotation = "argocd.argoproj.io/skip-reconcile"
+)
+
+// GitOpsOptions controls which GitOps controllers should pause reconciliation during scaling.
+type GitOpsOptions struct {
+	FluxCD bool
+	ArgoCD bool
+}
+
 // Func allow to scale down a StatefulSet with his namespace and name.
 // clientset: Kubernetes clientset
 // namespace: Namespace of the StatefulSet
 // name: Name of the StatefulSet
-func ScaleDown(ctx context.Context, clientset kubernetes.Interface, namespace, name string) error {
+func ScaleDown(ctx context.Context, clientset kubernetes.Interface, namespace, name string, options GitOpsOptions) error {
 	log.Printf("Trying to scale down %s/%s", namespace, name)
-	_, err := clientset.AppsV1().StatefulSets(namespace).Patch(
+	annotations := map[string]interface{}{}
+	if options.FluxCD {
+		annotations[fluxCDReconcileAnnotation] = "disabled"
+	}
+	if options.ArgoCD {
+		annotations[argoCDSkipReconcileAnnotation] = "true"
+	}
+	patch, err := scalePatch(0, annotations)
+	if err != nil {
+		return fmt.Errorf("scale down failed for statefulset %s/%s: %w", namespace, name, err)
+	}
+	_, err = clientset.AppsV1().StatefulSets(namespace).Patch(
 		ctx,
 		name,
 		types.MergePatchType,
-		[]byte(`{"spec":{"replicas":0}}`),
+		patch,
 		metav1.PatchOptions{},
 	)
 	if err != nil {
@@ -38,13 +61,24 @@ func ScaleDown(ctx context.Context, clientset kubernetes.Interface, namespace, n
 // clientset: Kubernetes clientset
 // namespace: Namespace of the StatefulSet
 // name: Name of the StatefulSet
-func ScaleUp(ctx context.Context, clientset kubernetes.Interface, namespace, name string) error {
+func ScaleUp(ctx context.Context, clientset kubernetes.Interface, namespace, name string, options GitOpsOptions) error {
 	log.Printf("Trying to scale up %s/%s", namespace, name)
-	_, err := clientset.AppsV1().StatefulSets(namespace).Patch(
+	annotations := map[string]interface{}{}
+	if options.FluxCD {
+		annotations[fluxCDReconcileAnnotation] = nil
+	}
+	if options.ArgoCD {
+		annotations[argoCDSkipReconcileAnnotation] = nil
+	}
+	patch, err := scalePatch(1, annotations)
+	if err != nil {
+		return fmt.Errorf("scale up failed for statefulset %s/%s: %w", namespace, name, err)
+	}
+	_, err = clientset.AppsV1().StatefulSets(namespace).Patch(
 		ctx,
 		name,
 		types.MergePatchType,
-		[]byte(`{"spec":{"replicas":1}}`),
+		patch,
 		metav1.PatchOptions{},
 	)
 	if err != nil {
@@ -52,6 +86,14 @@ func ScaleUp(ctx context.Context, clientset kubernetes.Interface, namespace, nam
 	}
 	log.Printf("%s/%s scaled up", namespace, name)
 	return nil
+}
+
+func scalePatch(replicas int32, annotations map[string]interface{}) ([]byte, error) {
+	patch := map[string]interface{}{"spec": map[string]int32{"replicas": replicas}}
+	if len(annotations) > 0 {
+		patch["metadata"] = map[string]interface{}{"annotations": annotations}
+	}
+	return json.Marshal(patch)
 }
 
 // Find the State of the pod. Return True if it is Ready, else return False.

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"k8s-plex-backup/internal/config"
+	"k8s-plex-backup/internal/k8s"
 	"k8s-plex-backup/internal/worker"
 )
 
@@ -30,7 +31,7 @@ func run() error {
 	)
 
 	log.Printf(
-		"Configuration:\nNamespace=%s\nStatefulSetName=%s\nSourceDirectory=%s\nDestinationDirectory=%s\nScaleDownTimeout=%s\nScaleUpTimeout=%s\nRetentionDays=%d",
+		"Configuration:\nNamespace=%s\nStatefulSetName=%s\nSourceDirectory=%s\nDestinationDirectory=%s\nScaleDownTimeout=%s\nScaleUpTimeout=%s\nRetentionDays=%d\nFluxCDOption=%t\nArgoCDOption=%t",
 		config.Namespace,
 		config.StatefulSetName,
 		config.SourceDirectory,
@@ -38,6 +39,8 @@ func run() error {
 		config.ScaleDownTimeout,
 		config.ScaleUpTimeout,
 		config.RetentionDays,
+		config.FluxCDOption,
+		config.ArgoCDOption,
 	)
 
 	defer func() {
@@ -46,6 +49,7 @@ func run() error {
 			config.Namespace,
 			config.StatefulSetName,
 			config.ScaleUpTimeout,
+			k8s.GitOpsOptions{FluxCD: config.FluxCDOption, ArgoCD: config.ArgoCDOption},
 		); err != nil {
 			log.Printf("Error during scale-up : %s", err)
 		}
@@ -56,6 +60,7 @@ func run() error {
 		config.Namespace,
 		config.StatefulSetName,
 		config.ScaleDownTimeout,
+		k8s.GitOpsOptions{FluxCD: config.FluxCDOption, ArgoCD: config.ArgoCDOption},
 	); err != nil {
 		return fmt.Errorf("Error during scale-down : %w", err) //nolint:all
 	}

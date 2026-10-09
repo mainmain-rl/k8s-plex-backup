@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s-plex-backup/internal/k8s"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,7 +138,7 @@ func TestRunScaleDown_ScalesToZero(t *testing.T) {
 	stop := startFakeReconciler(t, client, ns, name)
 	defer stop()
 
-	if err := RunScaleDown(client, ns, name, 5*time.Second); err != nil {
+	if err := RunScaleDown(client, ns, name, 5*time.Second, k8s.GitOpsOptions{}); err != nil {
 		t.Fatalf("RunScaleDown a renvoyé une erreur inattendue : %v", err)
 	}
 
@@ -153,7 +155,7 @@ func TestRunScaleDown_TimesOutWhenReplicasNeverDrop(t *testing.T) {
 	client, ns, name := newFakeStatefulSet(1)
 	// Pas de reconciler ici : le status ne convergera jamais vers 0,
 	// donc l'attente doit finir par expirer.
-	err := RunScaleDown(client, ns, name, 300*time.Millisecond)
+	err := RunScaleDown(client, ns, name, 300*time.Millisecond, k8s.GitOpsOptions{})
 	if err == nil {
 		t.Fatal("attendu une erreur quand les replicas ne redescendent jamais à 0, obtenu nil")
 	}
@@ -161,7 +163,7 @@ func TestRunScaleDown_TimesOutWhenReplicasNeverDrop(t *testing.T) {
 
 func TestRunScaleDown_StatefulSetNotFound(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	if err := RunScaleDown(client, "plex-ns", "does-not-exist", time.Second); err == nil {
+	if err := RunScaleDown(client, "plex-ns", "does-not-exist", time.Second, k8s.GitOpsOptions{}); err == nil {
 		t.Fatal("attendu une erreur quand le StatefulSet n'existe pas")
 	}
 }
@@ -175,7 +177,7 @@ func TestRunScaleUp_ScalesToOneAndWaitsForPodReady(t *testing.T) {
 	stop := startFakeReconciler(t, client, ns, name)
 	defer stop()
 
-	if err := RunScaleUp(client, ns, name, 5*time.Second); err != nil {
+	if err := RunScaleUp(client, ns, name, 5*time.Second, k8s.GitOpsOptions{}); err != nil {
 		t.Fatalf("RunScaleUp a renvoyé une erreur inattendue : %v", err)
 	}
 
@@ -193,7 +195,7 @@ func TestRunScaleUp_TimesOutWhenReplicasNeverRise(t *testing.T) {
 	// L'attente sur les replicas (qui utilise `timeout`) échouera avant
 	// même d'atteindre l'attente de pod ready (codée en dur à 10 minutes
 	// dans RunScaleUp), donc ce test reste rapide.
-	err := RunScaleUp(client, ns, name, 300*time.Millisecond)
+	err := RunScaleUp(client, ns, name, 300*time.Millisecond, k8s.GitOpsOptions{})
 	if err == nil {
 		t.Fatal("attendu une erreur quand les replicas ne montent jamais à 1, obtenu nil")
 	}
@@ -201,7 +203,7 @@ func TestRunScaleUp_TimesOutWhenReplicasNeverRise(t *testing.T) {
 
 func TestRunScaleUp_StatefulSetNotFound(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	if err := RunScaleUp(client, "plex-ns", "does-not-exist", time.Second); err == nil {
+	if err := RunScaleUp(client, "plex-ns", "does-not-exist", time.Second, k8s.GitOpsOptions{}); err == nil {
 		t.Fatal("attendu une erreur quand le StatefulSet n'existe pas")
 	}
 }

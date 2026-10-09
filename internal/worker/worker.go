@@ -20,10 +20,10 @@ import (
 // plexNamespace: Namespace of the StatefulSet
 // plexStatefulsetName: Name of the StatefulSet
 // timeout: Timeout for waiting for the pod to be terminated
-func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration) error {
+func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration, options k8s.GitOpsOptions) error {
 	ctx := context.Background()
 	log.Printf("Starting scale down for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
-	if err := k8s.ScaleDown(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
+	if err := k8s.ScaleDown(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, options); err != nil {
 		fmt.Errorf("Error when ScaleDown the StatefulSet: %s", err) //nolint:all
 		return err
 	}
@@ -40,10 +40,10 @@ func RunScaleDown(kubernetesClient kubernetes.Interface, plexNamespace string, p
 // plexNamespace: Namespace of the StatefulSet
 // plexStatefulsetName: Name of the StatefulSet
 // timeout: Timeout for waiting for the pod to become ready
-func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration) error {
+func RunScaleUp(kubernetesClient kubernetes.Interface, plexNamespace string, plexStatefulsetName string, timeout time.Duration, options k8s.GitOpsOptions) error {
 	ctx := context.Background()
 	log.Printf("Starting scale up for StatefulSet %s/%s", plexNamespace, plexStatefulsetName)
-	if err := k8s.ScaleUp(ctx, kubernetesClient, plexNamespace, plexStatefulsetName); err != nil {
+	if err := k8s.ScaleUp(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, options); err != nil {
 		return fmt.Errorf("Error when ScaleUp the StatefulSet: %s", err) //nolint:all
 	}
 	if err := k8s.WaitForStatefulSetReplicas(ctx, kubernetesClient, plexNamespace, plexStatefulsetName, 1, 2*time.Second, timeout); err != nil {
